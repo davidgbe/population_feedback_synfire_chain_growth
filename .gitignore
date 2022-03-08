@@ -1,0 +1,15 @@
+**/data/*
+**/robustness/*
+**/data_ext/*
+**/data.zip
+**/figures/*
+**/.ipynb_checkpoints/*
+**/__pycache__/*
+**/*.zip
+**/*.z*
+**/*.out
+**/*[0-9][0-9][0-9][0-9].slurm
+**/parsed_data*
+**/sampled_cell_rasters/*
+**/*.png
+**/core.*
