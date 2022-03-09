@@ -100,9 +100,7 @@ for src_name in scripts:
 					if n + batch_idx >= n_scripts:
 						continue
 
-					augmented_params = {
-						# 'DROP_SEV': str(drop_sev),
-					}
+					augmented_params = {}
 
 					for param_idx, v in enumerate(params.keys()):
 						augmented_params[v] = all_values[param_idx][n + batch_idx]
