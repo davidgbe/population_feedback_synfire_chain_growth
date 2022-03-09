@@ -62,7 +62,6 @@ M = Generic(
     E_E=0, E_I=-.09, E_A=-.07, T_E=.004, T_I=.004, T_A=.006,
     
     N_EXC=300,
-    N_UVA=3,
     N_INH=200,
     M=20,
     
@@ -94,6 +93,7 @@ M = Generic(
     W_E_E_R=0.26 * 0.004 * 1.3,
     W_E_E_R_MIN=1e-6,
     W_E_E_R_MAX=0.26 * 0.004 * 1.3 * 0.5, #1.5, then 1, then 0.2;
+    CELL_OUTPUT_MAX=0.26 * 0.004 * 1.3 * 3,
 
     # Dropout params
     DROPOUT_MIN_IDX=0,
@@ -116,6 +116,8 @@ M = Generic(
 S = Generic(RNG_SEED=args.rng_seed[0], DT=0.22e-3, T=400e-3, EPOCHS=8000)
 np.random.seed(S.RNG_SEED)
 
+M.N_UVA = M.N_EXC
+
 M.W_U_E = M.W_E_E_R / M.PROJECTION_NUM * 6
 
 M.TAU_PAIR_EE_CENTER = int(4.4e-3 / S.DT) + 1
@@ -123,6 +125,7 @@ M.CUT_IDX_TAU_PAIR_EE = int(3 * M.TAU_STDP_PAIR_EE / S.DT)
 kernel_base_ee = np.arange(2 * M.CUT_IDX_TAU_PAIR_EE + 1) - M.CUT_IDX_TAU_PAIR_EE - M.TAU_PAIR_EE_CENTER
 M.KERNEL_PAIR_EE = np.exp(-1 * np.abs(kernel_base_ee) * S.DT / M.TAU_STDP_PAIR_EE).astype(float)
 M.KERNEL_PAIR_EE = np.where(kernel_base_ee > 0, 1, -1) * M.KERNEL_PAIR_EE
+M.KERNEL_PAIR_EE[kernel_base_ee <= 0] *= 1.5
 print(M.KERNEL_PAIR_EE)
 
 M.CUT_IDX_TAU_PAIR_EI = int(2 * M.TAU_STDP_PAIR_EI / S.DT)
@@ -183,7 +186,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
 
         e_i_r = gaussian_if_under_val(m.E_I_CON_PROB, (m.N_INH, m.N_EXC), m.W_E_I_R, 0.3 * m.W_E_I_R)
 
-        uva_e_r = 0.2 * m.W_E_E_R * np.random.rand(m.N_EXC, m.N_UVA)
+        uva_e_r = 1. * m.W_E_E_R * np.diag(np.ones(m.N_UVA))
         uva_e_r[:m.N_DRIVING_CELLS, :] = 0
 
         w_r_e = np.block([
