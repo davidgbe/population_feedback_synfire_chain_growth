@@ -125,7 +125,6 @@ M.CUT_IDX_TAU_PAIR_EE = int(3 * M.TAU_STDP_PAIR_EE / S.DT)
 kernel_base_ee = np.arange(2 * M.CUT_IDX_TAU_PAIR_EE + 1) - M.CUT_IDX_TAU_PAIR_EE - M.TAU_PAIR_EE_CENTER
 M.KERNEL_PAIR_EE = np.exp(-1 * np.abs(kernel_base_ee) * S.DT / M.TAU_STDP_PAIR_EE).astype(float)
 M.KERNEL_PAIR_EE = np.where(kernel_base_ee > 0, 1, -1) * M.KERNEL_PAIR_EE
-M.KERNEL_PAIR_EE[kernel_base_ee <= 0] *= 1.5
 print(M.KERNEL_PAIR_EE)
 
 M.CUT_IDX_TAU_PAIR_EI = int(2 * M.TAU_STDP_PAIR_EI / S.DT)
@@ -156,7 +155,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
     os.makedirs(sampled_cell_output_dir)
     
     w_u_proj = np.diag(np.ones(m.N_DRIVING_CELLS)) * m.W_U_E * 0.5
-    w_u_uva = np.diag(np.ones(m.N_UVA)) * m.W_U_E * 0.5
+    w_u_uva = np.diag(np.ones(m.N_UVA)) * m.W_U_E * 1.5
 
     w_u_e = np.zeros([m.N_EXC + m.N_UVA, m.N_DRIVING_CELLS + m.N_UVA])
     w_u_e[:m.N_DRIVING_CELLS, :m.N_DRIVING_CELLS] += w_u_proj
@@ -186,7 +185,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
 
         e_i_r = gaussian_if_under_val(m.E_I_CON_PROB, (m.N_INH, m.N_EXC), m.W_E_I_R, 0.3 * m.W_E_I_R)
 
-        uva_e_r = 1. * m.W_E_E_R * np.diag(np.ones(m.N_UVA))
+        uva_e_r = 0.2 * m.W_E_E_R * np.diag(np.ones(m.N_UVA))
         uva_e_r[:m.N_DRIVING_CELLS, :] = 0
 
         w_r_e = np.block([
@@ -292,7 +291,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
 
         def make_poisson_input(dur=0.2, offset=0.06):
             x = np.zeros(len(t))
-            x[int(offset/S.DT):int(offset/S.DT) + int(dur/S.DT)] = np.random.poisson(lam=80 * S.DT, size=int(dur/S.DT))
+            x[int(offset/S.DT):int(offset/S.DT) + int(dur/S.DT)] = np.random.poisson(lam=10 * S.DT, size=int(dur/S.DT))
             return x
 
         # uva_spks_base = np.random.poisson(lam=20 * S.DT, size=len(t))
@@ -375,7 +374,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
         # axs[1].set_ylim(0, m.N_EXC + m.N_SILENT)
 
         raster = np.stack([rsp.spks_t, rsp.spks_c])
-        exc_raster = raster[:, raster[1, :] < m.N_EXC + m.N_UVA]
+        exc_raster = raster[:, raster[1, :] < m.N_EXC]
         inh_raster = raster[:, raster[1, :] >= (m.N_EXC + m.N_UVA)]
 
         spk_bins_i, freqs_i = bin_occurrences(spks_for_i_cells.sum(axis=0), max_val=800, bin_size=1)
@@ -383,7 +382,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
         axs[1].bar(spk_bins_i, freqs_i, color='black', alpha=0.5, zorder=-1)
 
         axs[0].scatter(exc_raster[0, :] * 1000, exc_raster[1, :], s=1, c='black', zorder=0, alpha=1)
-        axs[0].scatter(inh_raster[0, :] * 1000, inh_raster[1, :], s=1, c='red', zorder=0, alpha=1)
+        axs[0].scatter(inh_raster[0, :] * 1000, inh_raster[1, :] - m.N_UVA, s=1, c='red', zorder=0, alpha=1)
 
         axs[0].set_ylim(-1, m.N_EXC + m.N_INH)
         axs[0].set_xlim(m.INPUT_DELAY * 1000, 350)
