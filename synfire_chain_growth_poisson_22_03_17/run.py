@@ -92,7 +92,7 @@ M = Generic(
     W_A=0,
     W_E_E_R=0.26 * 0.004 * 1.3,
     W_E_E_R_MIN=1e-6,
-    W_E_E_R_MAX=0.26 * 0.004 * 1.3 * 0.1,
+    W_E_E_R_MAX=0.26 * 0.004 * 1.3 * 0.05, #0.1
     CELL_OUTPUT_MAX=0.26 * 0.004 * 1.3 * 3,
 
     # Dropout params

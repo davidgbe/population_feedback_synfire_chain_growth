@@ -101,7 +101,7 @@ M = Generic(
     DROPOUT_SEV=0,
 
     # Synaptic plasticity params
-    TAU_STDP_PAIR_EE=10e-3,
+    TAU_STDP_PAIR_EE=20e-3,
     TAU_STDP_PAIR_EI=2e-3,
 
     SINGLE_CELL_FR_SETPOINT_MIN=6,
