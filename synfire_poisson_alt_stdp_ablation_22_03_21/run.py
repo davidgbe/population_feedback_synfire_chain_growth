@@ -97,8 +97,9 @@ M = Generic(
 
     # Dropout params
     DROPOUT_MIN_IDX=0,
-    DROPOUT_ITER=10000,
-    DROPOUT_SEV=0,
+    DROPOUT_MAX_IDX=0,
+    DROPOUT_ITER=2,
+    DROPOUT_SEV=args.dropout_per[0],
 
     # Synaptic plasticity params
     TAU_STDP_PAIR_EE=15e-3,
@@ -125,7 +126,6 @@ M.CUT_IDX_TAU_PAIR_EE = int(3 * M.TAU_STDP_PAIR_EE / S.DT)
 kernel_base_ee = np.arange(2 * M.CUT_IDX_TAU_PAIR_EE + 1) - M.CUT_IDX_TAU_PAIR_EE - M.TAU_PAIR_EE_CENTER
 M.KERNEL_PAIR_EE = np.exp(-1 * np.abs(kernel_base_ee) * S.DT / M.TAU_STDP_PAIR_EE).astype(float)
 M.KERNEL_PAIR_EE = np.where(kernel_base_ee > 0, 1, -1) * M.KERNEL_PAIR_EE
-print(M.KERNEL_PAIR_EE)
 
 M.CUT_IDX_TAU_PAIR_EI = int(2 * M.TAU_STDP_PAIR_EI / S.DT)
 kernel_base_ei = np.arange(2 * M.CUT_IDX_TAU_PAIR_EI + 1) - M.CUT_IDX_TAU_PAIR_EI
@@ -142,7 +142,7 @@ print('T_M_E =', 1000*M.C_M_E/M.G_L_E, 'ms')  # E cell membrane time constant (C
 
 ### RUN_TEST function
 
-def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E': 0, 'I': 0},
+def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E': 0, 'I': 0},
     w_r_e=None, w_r_i=None, epochs=500, e_cell_pop_fr_setpoint=None):
 
     output_dir = f'./figures/{output_dir_name}'
@@ -260,6 +260,9 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
         print(f'{progress}% finished')
 
         start = time.time()
+
+        if i_e == m.DROPOUT_ITER:
+            w_r_copy['E'][:(m.N_EXC + m.N_UVA + m.N_INH), :m.N_EXC], surviving_cell_indices = dropout_on_mat(w_r_copy['E'][:(m.N_EXC + m.N_UVA + m.N_INH), :m.N_EXC], dropout['E'], min_idx=m.DROPOUT_MIN_IDX, max_idx=m.DROPOUT_MAX_IDX)
 
         t = np.arange(0, S.T, S.DT)
 
@@ -492,6 +495,9 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
                 if e_cell_pop_fr_setpoint is not None:
                     base_data_to_save['e_cell_pop_fr_setpoint'] = e_cell_pop_fr_setpoint
 
+                if i_e >= m.DROPOUT_ITER:
+                    base_data_to_save['surviving_cell_indices'] = surviving_cell_indices
+
                 # if i_e >= m.DROPOUT_ITER:
                 #     update_obj = {
                 #         'exc_cells_initially_active': exc_cells_initially_active,
@@ -525,10 +531,10 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E'
 
 
 
-def quick_plot(m, run_title='', w_r_e=None, w_r_i=None, n_show_only=None, add_noise=True, dropouts={'E': 0, 'I': 0}, e_cell_pop_fr_setpoint=None):
+def quick_plot(m, run_title='', w_r_e=None, w_r_i=None, n_show_only=None, add_noise=True, dropout={'E': 0, 'I': 0}, e_cell_pop_fr_setpoint=None):
     output_dir_name = f'{run_title}_{time_stamp(s=True)}:{zero_pad(int(np.random.rand() * 9999), 4)}'
 
-    run_test(m, output_dir_name=output_dir_name, n_show_only=n_show_only, add_noise=add_noise, dropouts=dropouts,
+    run_test(m, output_dir_name=output_dir_name, n_show_only=n_show_only, add_noise=add_noise, dropout=dropout,
                         w_r_e=w_r_e, w_r_i=w_r_i, epochs=S.EPOCHS, e_cell_pop_fr_setpoint=e_cell_pop_fr_setpoint)
 
 def process_single_activation(exc_raster, m):
@@ -559,8 +565,8 @@ for i in range(1):
     e_cell_pop_fr_setpoint = None
 
     if args.load_run is not None and args.load_run[0] is not '':
-        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 80)
+        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 710)
         w_r_e = loaded_data['w_r_e'].toarray()
         w_r_i = loaded_data['w_r_i'].toarray()
 
-    quick_plot(M, run_title=title, w_r_e=w_r_e, w_r_i=w_r_i, dropouts={'E': M.DROPOUT_SEV, 'I': 0})
+    quick_plot(M, run_title=title, w_r_e=w_r_e, w_r_i=w_r_i, e_cell_pop_fr_setpoint=e_cell_pop_fr_setpoint, dropout={'E': M.DROPOUT_SEV, 'I': 0})
