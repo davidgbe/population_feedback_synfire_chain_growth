@@ -55,7 +55,7 @@ M = Generic(
     G_L_I=.4e-3, 
     E_L_I=-.057,
     V_TH_I=-.043,
-    T_R_I=1e-3,
+    T_R_I=0.25e-3,
     E_R_I=-.055, # reset voltage (V)
     
     # syn rev potentials and decay times
@@ -89,7 +89,7 @@ M = Generic(
     W_E_I_R_MAX=10e-5,
     W_I_E_R=1.5e-5,
     W_I_E_R_MAX=3e-5,
-    W_A=0,
+    W_A=2.5e-6,
     W_E_E_R=0.26 * 0.004 * 1.3,
     W_E_E_R_MIN=1e-6,
     W_E_E_R_MAX=0.26 * 0.004 * 1.3 * 0.5, #1.5, then 1, then 0.2;

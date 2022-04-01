@@ -55,7 +55,7 @@ M = Generic(
     G_L_I=.4e-3, 
     E_L_I=-.057,
     V_TH_I=-.043,
-    T_R_I=1e-3,
+    T_R_I=0.25e-3,
     E_R_I=-.055, # reset voltage (V)
     
     # syn rev potentials and decay times
@@ -98,10 +98,10 @@ M = Generic(
     # Dropout params
     DROPOUT_MIN_IDX=0,
     DROPOUT_MAX_IDX=0, # set elsewhere
-    DROPOUT_ITER=120,
+    DROPOUT_ITER=10,
     DROPOUT_SEV=args.dropout_per[0],
 
-    POP_FR_TRIALS=(100, 110),
+    POP_FR_TRIALS=(1, 8),
 
     # Synaptic plasticity params
     TAU_STDP_PAIR_EE=15e-3,
@@ -481,7 +481,8 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
             w_e_e_hard_bound = m.W_E_E_R_MAX
 
-            w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += ((stdp_ee_depression + firing_rate_potentiation + fr_pop_step) * w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)])
+            w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += ((stdp_ee_depression + firing_rate_potentiation) * w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)])
+            w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += np.multiply(fr_pop_step, ee_connectivity)
             w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += (stdp_ee_potentiation * (m.W_E_E_R_MAX * ee_connectivity - w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)]))
             
             w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)][(w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] < m.W_E_E_R_MIN) & ee_connectivity] = m.W_E_E_R_MIN

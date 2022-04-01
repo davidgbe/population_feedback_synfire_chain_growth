@@ -98,7 +98,7 @@ M = Generic(
     # Dropout params
     DROPOUT_MIN_IDX=0,
     DROPOUT_MAX_IDX=0, # set elsewhere
-    DROPOUT_ITER=120,
+    DROPOUT_ITER=5,
     DROPOUT_SEV=args.dropout_per[0],
 
     POP_FR_TRIALS=(100, 110),
@@ -586,7 +586,7 @@ for i in range(1):
     e_cell_pop_fr_setpoint = None
 
     if args.load_run is not None and args.load_run[0] is not '':
-        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 710)
+        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 10)
         w_r_e = loaded_data['w_r_e'].toarray()
         w_r_i = loaded_data['w_r_i'].toarray()
 

@@ -55,7 +55,7 @@ M = Generic(
     G_L_I=.4e-3, 
     E_L_I=-.057,
     V_TH_I=-.043,
-    T_R_I=1e-3,
+    T_R_I=0.25e-3,
     E_R_I=-.055, # reset voltage (V)
     
     # syn rev potentials and decay times
@@ -87,7 +87,7 @@ M = Generic(
     # Weights
     W_E_I_R=5e-5,
     W_E_I_R_MAX=10e-5,
-    W_I_E_R=1.5e-5,
+    W_I_E_R=1.5e-5 / 2,
     W_I_E_R_MAX=3e-5,
     W_A=0,
     W_E_E_R=0.26 * 0.004 * 1.3,
@@ -97,11 +97,8 @@ M = Generic(
 
     # Dropout params
     DROPOUT_MIN_IDX=0,
-    DROPOUT_MAX_IDX=0, # set elsewhere
-    DROPOUT_ITER=120,
-    DROPOUT_SEV=args.dropout_per[0],
-
-    POP_FR_TRIALS=(100, 110),
+    DROPOUT_ITER=10000,
+    DROPOUT_SEV=0,
 
     # Synaptic plasticity params
     TAU_STDP_PAIR_EE=15e-3,
@@ -128,6 +125,7 @@ M.CUT_IDX_TAU_PAIR_EE = int(3 * M.TAU_STDP_PAIR_EE / S.DT)
 kernel_base_ee = np.arange(2 * M.CUT_IDX_TAU_PAIR_EE + 1) - M.CUT_IDX_TAU_PAIR_EE - M.TAU_PAIR_EE_CENTER
 M.KERNEL_PAIR_EE = np.exp(-1 * np.abs(kernel_base_ee) * S.DT / M.TAU_STDP_PAIR_EE).astype(float)
 M.KERNEL_PAIR_EE = np.where(kernel_base_ee > 0, 1, -1) * M.KERNEL_PAIR_EE
+print(M.KERNEL_PAIR_EE)
 
 M.CUT_IDX_TAU_PAIR_EI = int(2 * M.TAU_STDP_PAIR_EI / S.DT)
 kernel_base_ei = np.arange(2 * M.CUT_IDX_TAU_PAIR_EI + 1) - M.CUT_IDX_TAU_PAIR_EI
@@ -144,7 +142,7 @@ print('T_M_E =', 1000*M.C_M_E/M.G_L_E, 'ms')  # E cell membrane time constant (C
 
 ### RUN_TEST function
 
-def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E': 0, 'I': 0},
+def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropouts={'E': 0, 'I': 0},
     w_r_e=None, w_r_i=None, epochs=500, e_cell_pop_fr_setpoint=None):
 
     output_dir = f'./figures/{output_dir_name}'
@@ -182,6 +180,8 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         w_e_e_r[w_e_e_r > 0.6] = 0
         w_e_e_r *= (m.W_E_E_R * 0.02 / 0.6)
         np.fill_diagonal(w_e_e_r, 0.)
+
+        connectivity = np.where(w_e_e_r > 0, 1, 0)
 
         e_i_r = gaussian_if_under_val(m.E_I_CON_PROB, (m.N_INH, m.N_EXC), m.W_E_I_R, 0.3 * m.W_E_I_R)
 
@@ -253,8 +253,6 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
     # snapshot = None
     # last_snapshot = tracemalloc.take_snapshot()
 
-    e_cell_pop_fr_measurements = None
-
     for i_e in range(epochs):
 
         progress = f'{i_e / epochs * 100}'
@@ -262,10 +260,6 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         print(f'{progress}% finished')
 
         start = time.time()
-
-        if i_e == m.DROPOUT_ITER:
-            w_r_copy['E'][:(m.N_EXC + m.N_UVA + m.N_INH), :m.N_EXC], surviving_cell_indices = dropout_on_mat(w_r_copy['E'][:(m.N_EXC + m.N_UVA + m.N_INH), :m.N_EXC], dropout['E'], min_idx=m.DROPOUT_MIN_IDX, max_idx=m.DROPOUT_MAX_IDX)
-            ee_connectivity = np.where(w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)] > 0, 1, 0)
 
         t = np.arange(0, S.T, S.DT)
 
@@ -351,13 +345,12 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
         w_e_e_r_copy = w_r_copy['E'][:m.N_EXC, :m.N_EXC]
 
-        # 0.05 * np.mean(w_e_e_r_copy.sum(axis=1)
-        summed_w_bins, summed_w_counts = bin_occurrences(w_e_e_r_copy.sum(axis=1), bin_size=1e-4)
+        summed_w_bins, summed_w_counts = bin_occurrences(w_e_e_r_copy.sum(axis=1), bin_size=0.05 * np.mean(w_e_e_r_copy.sum(axis=1)))
         axs[2].plot(summed_w_bins, summed_w_counts)
         axs[2].set_xlabel('Normalized summed synapatic weight')
         axs[2].set_ylabel('Counts')
 
-        incoming_con_counts = np.count_nonzero(w_e_e_r_copy, axis=1)
+        incoming_con_counts = np.count_nonzero(w_e_e_r_copy, axis=0)
         incoming_con_bins, incoming_con_freqs = bin_occurrences(incoming_con_counts, bin_size=1)
         axs[3].plot(incoming_con_bins, incoming_con_freqs)
         axs[3].set_xlabel('Number of incoming synapses per cell')
@@ -454,25 +447,8 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
 
             # E POPULATION-LEVEL FIRING RATE RULE
-            fr_pop_step = 0
-
-            if i_e >= m.POP_FR_TRIALS[0] and i_e < m.POP_FR_TRIALS[1]:
-                if e_cell_pop_fr_measurements is None:
-                    e_cell_pop_fr_measurements = np.sum(spks_for_e_cells)
-                else:
-                    e_cell_pop_fr_measurements += np.sum(spks_for_e_cells)
-            elif i_e == m.POP_FR_TRIALS[1]:
-                e_cell_pop_fr_setpoint = e_cell_pop_fr_measurements / (m.POP_FR_TRIALS[1] - m.POP_FR_TRIALS[0])
-            elif i_e > m.POP_FR_TRIALS[1]:
-                if i_e >= m.DROPOUT_ITER:
-                    current_summed_spks = np.sum(spks_for_e_cells[:, surviving_cell_indices.astype(bool)])
-                else:
-                    current_summed_spks = np.sum(spks_for_e_cells)
-                fr_pop_diff = e_cell_pop_fr_setpoint - current_summed_spks
-                tau_pop = 20
-                print((-1 + np.exp(fr_pop_diff / tau_pop)) / (1 + np.exp(fr_pop_diff / tau_pop)))
-                fr_pop_step = m.ETA * m.GAMMA * (-1 + np.exp(fr_pop_diff / tau_pop)) / (1 + np.exp(fr_pop_diff / tau_pop)) * np.ones((m.N_EXC, m.N_EXC + m.N_UVA))
-                fr_pop_step[:, m.N_EXC:] = 0
+            # fr_pop_update = e_cell_pop_fr_setpoint - np.sum(spks_for_e_cells)
+            # fr_pop_step = m.GAMMA * (-1 + np.exp(fr_pop_update / 60)) / (1 + np.exp(fr_pop_update / 60)) * np.ones((m.N_EXC, m.N_EXC))
 
 
             firing_rate_potentiation = m.ETA * m.ALPHA * fr_update_e
@@ -481,7 +457,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
             w_e_e_hard_bound = m.W_E_E_R_MAX
 
-            w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += ((stdp_ee_depression + firing_rate_potentiation + fr_pop_step) * w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)])
+            w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += ((firing_rate_potentiation + stdp_ee_depression) * w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)])
             w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] += (stdp_ee_potentiation * (m.W_E_E_R_MAX * ee_connectivity - w_r_copy['E'][:(m.N_EXC), :(m.N_EXC + m.N_UVA)]))
             
             w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)][(w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)] < m.W_E_E_R_MIN) & ee_connectivity] = m.W_E_E_R_MIN
@@ -516,9 +492,6 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
                 if e_cell_pop_fr_setpoint is not None:
                     base_data_to_save['e_cell_pop_fr_setpoint'] = e_cell_pop_fr_setpoint
 
-                if i_e >= m.DROPOUT_ITER:
-                    base_data_to_save['surviving_cell_indices'] = surviving_cell_indices
-
                 # if i_e >= m.DROPOUT_ITER:
                 #     update_obj = {
                 #         'exc_cells_initially_active': exc_cells_initially_active,
@@ -552,10 +525,10 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
 
 
-def quick_plot(m, run_title='', w_r_e=None, w_r_i=None, n_show_only=None, add_noise=True, dropout={'E': 0, 'I': 0}, e_cell_pop_fr_setpoint=None):
+def quick_plot(m, run_title='', w_r_e=None, w_r_i=None, n_show_only=None, add_noise=True, dropouts={'E': 0, 'I': 0}, e_cell_pop_fr_setpoint=None):
     output_dir_name = f'{run_title}_{time_stamp(s=True)}:{zero_pad(int(np.random.rand() * 9999), 4)}'
 
-    run_test(m, output_dir_name=output_dir_name, n_show_only=n_show_only, add_noise=add_noise, dropout=dropout,
+    run_test(m, output_dir_name=output_dir_name, n_show_only=n_show_only, add_noise=add_noise, dropouts=dropouts,
                         w_r_e=w_r_e, w_r_i=w_r_i, epochs=S.EPOCHS, e_cell_pop_fr_setpoint=e_cell_pop_fr_setpoint)
 
 def process_single_activation(exc_raster, m):
@@ -586,8 +559,8 @@ for i in range(1):
     e_cell_pop_fr_setpoint = None
 
     if args.load_run is not None and args.load_run[0] is not '':
-        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 710)
+        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 80)
         w_r_e = loaded_data['w_r_e'].toarray()
         w_r_i = loaded_data['w_r_i'].toarray()
 
-    quick_plot(M, run_title=title, w_r_e=w_r_e, w_r_i=w_r_i, e_cell_pop_fr_setpoint=e_cell_pop_fr_setpoint, dropout={'E': M.DROPOUT_SEV, 'I': 0})
+    quick_plot(M, run_title=title, w_r_e=w_r_e, w_r_i=w_r_i, dropouts={'E': M.DROPOUT_SEV, 'I': 0})

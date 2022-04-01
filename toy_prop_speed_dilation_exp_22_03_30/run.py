@@ -55,7 +55,7 @@ M = Generic(
     G_L_I=.4e-3, 
     E_L_I=-.057,
     V_TH_I=-.043,
-    T_R_I=1e-3,
+    T_R_I=1e-3, #0.25e-3,
     E_R_I=-.055, # reset voltage (V)
     
     # syn rev potentials and decay times
@@ -85,12 +85,12 @@ M = Generic(
     I_E_CON_PROB=0.6,
 
     # Weights
-    W_E_I_R=5e-5,
+    W_E_I_R=7e-5,
     W_E_I_R_MAX=10e-5,
     W_I_E_R=1.5e-5,
     W_I_E_R_MAX=3e-5,
     W_A=0,
-    W_E_E_R=0.26 * 0.004 * 1.3,
+    W_E_E_R=0.26 * 0.004 * 1.1,
     W_E_E_R_MIN=1e-6,
     W_E_E_R_MAX=0.26 * 0.004 * 1.3 * 0.5, #1.5, then 1, then 0.2;
     CELL_OUTPUT_MAX=0.26 * 0.004 * 1.3 * 3,
@@ -98,7 +98,7 @@ M = Generic(
     # Dropout params
     DROPOUT_MIN_IDX=0,
     DROPOUT_MAX_IDX=0, # set elsewhere
-    DROPOUT_ITER=120,
+    DROPOUT_ITER=2,
     DROPOUT_SEV=args.dropout_per[0],
 
     POP_FR_TRIALS=(100, 110),
@@ -119,7 +119,7 @@ M = Generic(
 S = Generic(RNG_SEED=args.rng_seed[0], DT=0.22e-3, T=400e-3, EPOCHS=8000)
 np.random.seed(S.RNG_SEED)
 
-M.N_UVA = M.N_EXC
+M.N_UVA = 0
 
 M.W_U_E = M.W_E_E_R / 20 * 6
 
@@ -141,6 +141,30 @@ M.DROPOUT_MAX_IDX = M.N_EXC
 
 print('T_M_E =', 1000*M.C_M_E/M.G_L_E, 'ms')  # E cell membrane time constant (C_m/g_m)
 
+def ff_unit_func():
+    w = M.W_E_E_R / M.PROJECTION_NUM
+    return gaussian_if_under_val(0.8, (M.PROJECTION_NUM, M.PROJECTION_NUM), w, 0.2 * w)
+
+def generate_ff_chain(size, unit_size, unit_funcs, ff_deg=[0, 1], tempering=[1., 1.]):
+    if size % unit_size != 0:
+        raise ValueError('unit_size does not evenly divide size')
+
+    if len(ff_deg) != len(tempering):
+        raise ValueError('ff_deg and tempering must be the same length')
+
+    n_units = int(size / unit_size)
+    chain_order = np.arange(0, n_units, dtype=int)
+    mat = np.zeros((size, size))
+
+    for idx in chain_order:
+        layer_start = unit_size * idx
+        for j, ff_idx in enumerate(ff_deg):
+            if idx + ff_idx < len(chain_order) and idx + ff_idx >= 0:
+                ff_layer_idx = chain_order[idx + ff_idx]
+                ff_layer_start = unit_size * ff_layer_idx
+
+                mat[ff_layer_start : ff_layer_start + unit_size, layer_start : layer_start + unit_size] = unit_funcs[j]() * tempering[j]
+    return mat
 
 ### RUN_TEST function
 
@@ -178,20 +202,14 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
 
     if w_r_e is None:
-        w_e_e_r = np.random.rand(m.N_EXC, m.N_EXC)
-        w_e_e_r[w_e_e_r > 0.6] = 0
-        w_e_e_r *= (m.W_E_E_R * 0.02 / 0.6)
+        w_e_e_r = generate_ff_chain(m.N_EXC, m.PROJECTION_NUM, [ff_unit_func] * 1, ff_deg=np.arange(1) + 1, tempering=np.exp(-4/15 * np.arange(1)))
         np.fill_diagonal(w_e_e_r, 0.)
 
         e_i_r = gaussian_if_under_val(m.E_I_CON_PROB, (m.N_INH, m.N_EXC), m.W_E_I_R, 0.3 * m.W_E_I_R)
 
-        uva_e_r = 0.2 * m.W_E_E_R * np.diag(np.ones(m.N_UVA))
-        uva_e_r[:m.N_DRIVING_CELLS, :] = 0
-
         w_r_e = np.block([
-            [ w_e_e_r, uva_e_r, np.zeros((m.N_EXC, m.N_INH)) ],
-            [ np.zeros((m.N_UVA, m.N_EXC + m.N_UVA + m.N_INH)) ],
-            [ e_i_r,  np.zeros((m.N_INH, m.N_INH + m.N_UVA)) ],
+            [ w_e_e_r, np.zeros((m.N_EXC, m.N_INH)) ],
+            [ e_i_r,  np.zeros((m.N_INH, m.N_INH)) ],
         ])
 
     if w_r_i is None:
@@ -301,7 +319,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
             return x
 
         # uva_spks_base = np.random.poisson(lam=20 * S.DT, size=len(t))
-        spks_u[:, m.N_DRIVING_CELLS:(m.N_DRIVING_CELLS + m.N_UVA)] = np.stack([make_poisson_input() for i in range(m.N_UVA)]).T
+        # spks_u[:, m.N_DRIVING_CELLS:(m.N_DRIVING_CELLS + m.N_UVA)] = np.stack([make_poisson_input() for i in range(m.N_UVA)]).T
 
         ntwk = LIFNtwkG(
             c_m=c_m,
@@ -345,26 +363,26 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
             fig.savefig(f'{sampled_cell_output_dir}/sampled_cell_rasters_{int(i_e / sampled_trial_number)}.png')
 
         scale = 0.8
-        gs = gridspec.GridSpec(9, 1)
-        fig = plt.figure(figsize=(9 * scale, 23 * scale), tight_layout=True)
-        axs = [fig.add_subplot(gs[:2]), fig.add_subplot(gs[2]), fig.add_subplot(gs[3]), fig.add_subplot(gs[4]), fig.add_subplot(gs[5:7]), fig.add_subplot(gs[7:])]
+        gs = gridspec.GridSpec(10, 1)
+        fig = plt.figure(figsize=(9 * scale, 25 * scale), tight_layout=True)
+        axs = [fig.add_subplot(gs[:2]), fig.add_subplot(gs[2]), fig.add_subplot(gs[3]), fig.add_subplot(gs[4]), fig.add_subplot(gs[5]), fig.add_subplot(gs[6:8]), fig.add_subplot(gs[8:])]
 
         w_e_e_r_copy = w_r_copy['E'][:m.N_EXC, :m.N_EXC]
 
         # 0.05 * np.mean(w_e_e_r_copy.sum(axis=1)
         summed_w_bins, summed_w_counts = bin_occurrences(w_e_e_r_copy.sum(axis=1), bin_size=1e-4)
-        axs[2].plot(summed_w_bins, summed_w_counts)
-        axs[2].set_xlabel('Normalized summed synapatic weight')
-        axs[2].set_ylabel('Counts')
+        axs[3].plot(summed_w_bins, summed_w_counts)
+        axs[3].set_xlabel('Normalized summed synapatic weight')
+        axs[3].set_ylabel('Counts')
 
         incoming_con_counts = np.count_nonzero(w_e_e_r_copy, axis=1)
         incoming_con_bins, incoming_con_freqs = bin_occurrences(incoming_con_counts, bin_size=1)
-        axs[3].plot(incoming_con_bins, incoming_con_freqs)
-        axs[3].set_xlabel('Number of incoming synapses per cell')
-        axs[3].set_ylabel('Counts')
+        axs[4].plot(incoming_con_bins, incoming_con_freqs)
+        axs[4].set_xlabel('Number of incoming synapses per cell')
+        axs[4].set_ylabel('Counts')
 
-        graph_weight_matrix(w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)], 'w_e_e_r\n', ax=axs[4], v_max=m.W_E_E_R_MAX)
-        graph_weight_matrix(w_r_copy['I'][:m.N_EXC, (m.N_EXC + m.N_UVA):], 'w_i_e_r\n', ax=axs[5], v_max=m.W_E_I_R_MAX * 0.5)
+        graph_weight_matrix(w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)], 'w_e_e_r\n', ax=axs[5], v_max=m.W_E_E_R_MAX)
+        graph_weight_matrix(w_r_copy['I'][:m.N_EXC, (m.N_EXC + m.N_UVA):], 'w_i_e_r\n', ax=axs[6], v_max=m.W_E_I_R_MAX * 0.5)
 
         spks_for_e_cells = rsp.spks[:, :m.N_EXC]
         spks_for_i_cells = rsp.spks[:, (m.N_EXC + m.N_UVA):(m.N_EXC + m.N_UVA + m.N_INH)]
@@ -386,7 +404,8 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
 
         spk_bins_i, freqs_i = bin_occurrences(spks_for_i_cells.sum(axis=0), max_val=800, bin_size=1)
 
-        axs[1].bar(spk_bins_i, freqs_i, color='black', alpha=0.5, zorder=-1)
+        axs[2].bar(spk_bins_i, freqs_i, color='black', alpha=0.5, zorder=-1)
+        axs[2].set_xlim(-0.5, 100)
 
         axs[0].scatter(exc_raster[0, :] * 1000, exc_raster[1, :], s=1, c='black', zorder=0, alpha=1)
         axs[0].scatter(inh_raster[0, :] * 1000, inh_raster[1, :] - m.N_UVA, s=1, c='red', zorder=0, alpha=1)

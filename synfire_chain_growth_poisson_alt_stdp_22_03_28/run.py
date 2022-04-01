@@ -101,7 +101,7 @@ M = Generic(
     DROPOUT_SEV=0,
 
     # Synaptic plasticity params
-    TAU_STDP_PAIR_EE=8e-3,
+    TAU_STDP_PAIR_EE=10e-3,
     TAU_STDP_PAIR_EI=2e-3,
 
     SINGLE_CELL_FR_SETPOINT_MIN=6,
@@ -121,10 +121,16 @@ M.N_UVA = M.N_EXC
 M.W_U_E = M.W_E_E_R / 20 * 6
 
 M.TAU_PAIR_EE_CENTER = int(4.4e-3 / S.DT) + 1
-M.CUT_IDX_TAU_PAIR_EE = int(3 * M.TAU_STDP_PAIR_EE / S.DT)
+M.CUT_IDX_TAU_PAIR_EE = int(2.5 * M.TAU_STDP_PAIR_EE / S.DT)
 kernel_base_ee = np.arange(2 * M.CUT_IDX_TAU_PAIR_EE + 1) - M.CUT_IDX_TAU_PAIR_EE - M.TAU_PAIR_EE_CENTER
+
 M.KERNEL_PAIR_EE = np.exp(-1 * np.abs(kernel_base_ee) * S.DT / M.TAU_STDP_PAIR_EE).astype(float)
-M.KERNEL_PAIR_EE = np.where(kernel_base_ee > 0, 1, -1) * M.KERNEL_PAIR_EE
+
+def kernel_func(dt):
+    kernel = np.where(np.abs(dt) > 2 * M.TAU_STDP_PAIR_EE, 0, 1. - (0.5 * np.abs(dt) / M.TAU_STDP_PAIR_EE))
+    return np.where(dt > 0, 1, -1) * kernel
+
+M.KERNEL_PAIR_EE = kernel_func(kernel_base_ee * S.DT)
 print(M.KERNEL_PAIR_EE)
 
 M.CUT_IDX_TAU_PAIR_EI = int(2 * M.TAU_STDP_PAIR_EI / S.DT)
