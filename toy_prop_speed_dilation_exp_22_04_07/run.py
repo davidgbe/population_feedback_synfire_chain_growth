@@ -26,13 +26,14 @@ cc = np.concatenate
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--title', metavar='T', type=str, nargs=1)
-parser.add_argument('--alpha', metavar='a', type=float, nargs=1)
-parser.add_argument('--beta', metavar='b', type=float, nargs=1)
-parser.add_argument('--gamma', metavar='c', type=float, nargs=1)
-parser.add_argument('--fr_single_line_attr', metavar='s', type=int, nargs=1)
 parser.add_argument('--rng_seed', metavar='r', type=int, nargs=1)
-parser.add_argument('--load_run', metavar='l', type=str, nargs=1)
 parser.add_argument('--dropout_per', metavar='d', type=float, nargs=1)
+
+parser.add_argument('--w_ee', metavar='ee', type=float, nargs=1)
+parser.add_argument('--w_ei', metavar='ei', type=float, nargs=1)
+parser.add_argument('--w_ie', metavar='ie', type=float, nargs=1)
+
+parser.add_argument('--index', metavar='I', type=int, nargs=1)
 
 
 args = parser.parse_args()
@@ -44,7 +45,7 @@ print(args)
 M = Generic(
     # Excitatory membrane
     C_M_E=1e-6,  # membrane capacitance
-    G_L_E=.1e-3,  # membrane leak conductance (T_M (s) = C_M (F/cm^2) / G_L (S/cm^2))
+    G_L_E=0.1e-3,  # membrane leak conductance (T_M (s) = C_M (F/cm^2) / G_L (S/cm^2))
     E_L_E=-.07,  # membrane leak potential (V)
     V_TH_E=-.043,  # membrane spike threshold (V)
     T_R_E=1e-3,  # refractory period (s)
@@ -83,16 +84,12 @@ M = Generic(
     I_E_CON_PROB=1.,
 
     # Weights
-    # W_E_I_R=9e-5,
-    # W_E_I_R_MAX=10e-5,
-    # W_I_E_R=7e-5,
-    # W_I_E_R_MAX=10e-5,
-    W_E_I_R=3e-5,
-    W_I_E_R=3e-5,
+    W_E_I_R=args.w_ei[0],
+    W_I_E_R=args.w_ie[0],
     W_A=0,
-    W_E_E_R=0.26 * 0.004 * 0.6,
+    W_E_E_R=args.w_ee[0],
     W_E_E_R_MIN=1e-6,
-    W_E_E_R_MAX=0.26 * 0.004 * 1.5, #1.5, then 1, then 0.2;
+    W_E_E_R_MAX=0.26 * 0.004 * 3, #1.5, then 1, then 0.2;
     CELL_OUTPUT_MAX=0.26 * 0.004 * 1.3 * 3,
 
     # Dropout params
@@ -109,14 +106,14 @@ M = Generic(
 
     SINGLE_CELL_FR_SETPOINT_MIN=6,
     SINGLE_CELL_FR_SETPOINT_MIN_STD=2,
-    SINGLE_CELL_LINE_ATTR=bool(args.fr_single_line_attr[0]),
+    SINGLE_CELL_LINE_ATTR=0,
     ETA=0.15,
-    ALPHA=args.alpha[0], #3e-2
-    BETA=args.beta[0], #1e-3,
-    GAMMA=args.gamma[0], #1e-4,
+    ALPHA=0,
+    BETA=0, 
+    GAMMA=0, 
 )
 
-S = Generic(RNG_SEED=args.rng_seed[0], DT=0.22e-3, T=500e-3, EPOCHS=8000)
+S = Generic(RNG_SEED=args.rng_seed[0], DT=0.22e-3, T=500e-3, EPOCHS=1)
 np.random.seed(S.RNG_SEED)
 
 M.N_UVA = 0
@@ -141,9 +138,9 @@ M.DROPOUT_MAX_IDX = M.N_EXC
 
 print('T_M_E =', 1000*M.C_M_E/M.G_L_E, 'ms')  # E cell membrane time constant (C_m/g_m)
 
-def ff_unit_func():
-    w = M.W_E_E_R / M.PROJECTION_NUM
-    return gaussian_if_under_val(0.8, (M.PROJECTION_NUM, M.PROJECTION_NUM), w, 0.2 * w)
+def ff_unit_func(m):
+    w = m.W_E_E_R / m.PROJECTION_NUM
+    return gaussian_if_under_val(1, (m.PROJECTION_NUM, m.PROJECTION_NUM), w, 0.2 * w)
 
 def generate_ff_chain(size, unit_size, unit_funcs, ff_deg=[0, 1], tempering=[1., 1.]):
     if size % unit_size != 0:
@@ -163,7 +160,7 @@ def generate_ff_chain(size, unit_size, unit_funcs, ff_deg=[0, 1], tempering=[1.,
                 ff_layer_idx = chain_order[idx + ff_idx]
                 ff_layer_start = unit_size * ff_layer_idx
 
-                mat[ff_layer_start : ff_layer_start + unit_size, layer_start : layer_start + unit_size] = unit_funcs[j]() * tempering[j]
+                mat[ff_layer_start : ff_layer_start + unit_size, layer_start : layer_start + unit_size] = unit_funcs[j](m) * tempering[j]
     return mat
 
 ### RUN_TEST function
@@ -200,9 +197,11 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         'A': np.zeros((m.N_EXC + m.N_UVA + m.N_INH, m.N_DRIVING_CELLS + m.N_UVA)),
     }
 
+    def unit_func():
+        return ff_unit_func(m)
 
     if w_r_e is None:
-        w_e_e_r = generate_ff_chain(m.N_EXC, m.PROJECTION_NUM, [ff_unit_func] * 1, ff_deg=np.arange(1) + 1, tempering=np.exp(-4/15 * np.arange(1)))
+        w_e_e_r = generate_ff_chain(m.N_EXC, m.PROJECTION_NUM, [unit_func] * 1, ff_deg=np.arange(1) + 1, tempering=np.exp(-4/15 * np.arange(1)))
         np.fill_diagonal(w_e_e_r, 0.)
 
         e_i_r = gaussian_if_under_val(m.E_I_CON_PROB, (m.N_INH, m.N_EXC), m.W_E_I_R, 0)
@@ -382,7 +381,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         axs[4].set_ylabel('Counts')
 
         graph_weight_matrix(w_r_copy['E'][:m.N_EXC, :(m.N_EXC + m.N_UVA)], 'w_e_e_r\n', ax=axs[5], v_max=m.W_E_E_R_MAX)
-        graph_weight_matrix(w_r_copy['I'][:m.N_EXC, (m.N_EXC + m.N_UVA):], 'w_i_e_r\n', ax=axs[6], v_max=m.W_E_I_R_MAX * 0.5)
+        graph_weight_matrix(w_r_copy['I'][:m.N_EXC, (m.N_EXC + m.N_UVA):], 'w_i_e_r\n', ax=axs[6], v_max=m.W_E_I_R)
 
         spks_for_e_cells = rsp.spks[:, :m.N_EXC]
         spks_for_i_cells = rsp.spks[:, (m.N_EXC + m.N_UVA):(m.N_EXC + m.N_UVA + m.N_INH)]
@@ -420,8 +419,6 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         fig.savefig(f'{output_dir}/{zero_pad(i_e, 4)}.png')
 
         first_spk_times = process_single_activation(exc_raster, m)
-
-        print((800-400)/ (first_spk_times[800] - first_spk_times[400]))
 
         if i_e > 0:
             # if i_e % 80 == 0 and args.load_run is None:
@@ -519,14 +516,37 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
             # w_r_copy['I'][w_r_copy['I'] > m.W_I_E_R_MAX] = m.W_I_E_R_MAX
 
         if i_e % 10 == 0:
+
+                mean_initial_first_spk_time = np.nanmean(first_spk_times[400:410])
+                mean_final_first_spk_time = np.nanmean(first_spk_times[800:810])
+                prop_speed = (80 - 40) / (mean_final_first_spk_time - mean_initial_first_spk_time)
+
+                spiking_idxs = np.nonzero(first_spk_times[400:810])[0]
+
+
+                spks_for_spiking_idxs = spks_for_e_cells[:, spiking_idxs]
+
+                temporal_widths = []
+
+                for k in range(spks_for_spiking_idxs.shape[1]):
+                    temporal_widths.append(np.std(S.DT * np.nonzero(spks_for_spiking_idxs[:, k])[0]))
+
+                avg_temporal_width = np.mean(temporal_widths)
+                print(avg_temporal_width)
+
+
                 base_data_to_save = {
+                    'w_e_e': m.W_E_E_R,
+                    'w_e_i': m.W_E_I_R,
+                    'w_i_e': m.W_I_E_R,
                     'first_spk_times': first_spk_times,
-                    'w_r_e_summed': np.sum(rsp.ntwk.w_r['E'][:m.N_EXC, :m.N_EXC], axis=1),
-                    'w_r_e_i_summed': np.sum(rsp.ntwk.w_r['E'][m.N_EXC:, :m.N_EXC], axis=1),
                     'spk_bins': spk_bins,
                     'freqs': freqs,
                     'exc_raster': exc_raster,
                     'inh_raster': inh_raster,
+                    'prop_speed': prop_speed,
+                    'avg_temporal_width': avg_temporal_width,
+                    'stable': len(~np.isnan(first_spk_times[950:1000])) > 30,
                     # 'gs': rsp.gs,
                 }
 
@@ -548,12 +568,12 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
                 #     }
                 #     base_data_to_save.update(update_obj)
 
-                if i_e % 100 == 0:
-                    update_obj = {
-                        'w_r_e': rsp.ntwk.w_r['E'],
-                        'w_r_i': rsp.ntwk.w_r['I'],
-                    }
-                    base_data_to_save.update(update_obj)
+                # if i_e % 100 == 0:
+                #     update_obj = {
+                #         'w_r_e': rsp.ntwk.w_r['E'],
+                #         'w_r_i': rsp.ntwk.w_r['I'],
+                #     }
+                #     base_data_to_save.update(update_obj)
 
                 sio.savemat(robustness_output_dir + '/' + f'title_{title}_idx_{zero_pad(i_e, 4)}', base_data_to_save)
 
@@ -599,16 +619,7 @@ def clip(f, n=1):
     f_str = f_str[:(f_str.find('.') + 1 + n)]
     return f_str
 
-title = f'{args.title[0]}_ff_{clip(M.W_E_E_R / (0.26 * 0.004))}_eir_{clip(M.W_E_I_R * 1e5)}_ier_{clip(M.W_I_E_R * 1e5)}'
+title = f'{args.title[0]}_idx_{zero_pad(args.index[0], 4)}_seed_{args.rng_seed[0]}_wee_{args.w_ee[0]}_wei_{args.w_ei[0]}_wie_{args.w_ie[0]}'
+quick_plot(M, run_title=title, dropout={'E': M.DROPOUT_SEV, 'I': 0})
 
-for i in range(1):
-    w_r_e = None
-    w_r_i = None
-    e_cell_pop_fr_setpoint = None
 
-    if args.load_run is not None and args.load_run[0] is not '':
-        loaded_data = load_previous_run(os.path.join('./robustness', args.load_run[0]), 710)
-        w_r_e = loaded_data['w_r_e'].toarray()
-        w_r_i = loaded_data['w_r_i'].toarray()
-
-    quick_plot(M, run_title=title, w_r_e=w_r_e, w_r_i=w_r_i, e_cell_pop_fr_setpoint=e_cell_pop_fr_setpoint, dropout={'E': M.DROPOUT_SEV, 'I': 0})
