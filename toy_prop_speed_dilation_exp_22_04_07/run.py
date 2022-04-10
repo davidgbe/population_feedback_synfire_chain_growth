@@ -534,7 +534,6 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
                 avg_temporal_width = np.mean(temporal_widths)
                 print(avg_temporal_width)
 
-
                 base_data_to_save = {
                     'w_e_e': m.W_E_E_R,
                     'w_e_i': m.W_E_I_R,
@@ -545,6 +544,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
                     'exc_raster': exc_raster,
                     'inh_raster': inh_raster,
                     'prop_speed': prop_speed,
+                    'temporal_widths': temporal_widths,
                     'avg_temporal_width': avg_temporal_width,
                     'stable': len(~np.isnan(first_spk_times[950:1000])) > 30,
                     # 'gs': rsp.gs,

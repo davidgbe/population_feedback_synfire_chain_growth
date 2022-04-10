@@ -21,7 +21,7 @@ echo $CURRDIR
 cd //gscratch/stf/davidgbe/compneuro
 source davidgbe-env/bin/activate
 cd $CURRDIR
-python run.py --title sweep_w_e_i_7e-5 --index INDEX --rng_seed SEED --dropout_per 0 --w_ee W_E_E --w_ei W_E_I --w_ie W_I_E
+python run.py --title sweep_2_w_e_i_7e-5 --index INDEX --rng_seed SEED --dropout_per 0 --w_ee W_E_E --w_ei W_E_I --w_ie W_I_E
 wait
 deactivate
 
