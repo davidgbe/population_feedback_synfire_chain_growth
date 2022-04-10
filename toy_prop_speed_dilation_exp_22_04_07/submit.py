@@ -71,7 +71,7 @@ def pad_zeros(to_pad, length):
 		padded = '0' + padded
 	return padded
 
-batch_size = 500
+batch_size = 300
 
 params = OrderedDict()
 params['W_E_E'] = ((0.26 * 0.004 * 0.1, 0.26 * 0.004 * 2), 20)

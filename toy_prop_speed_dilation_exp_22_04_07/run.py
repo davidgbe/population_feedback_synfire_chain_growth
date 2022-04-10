@@ -160,7 +160,7 @@ def generate_ff_chain(size, unit_size, unit_funcs, ff_deg=[0, 1], tempering=[1.,
                 ff_layer_idx = chain_order[idx + ff_idx]
                 ff_layer_start = unit_size * ff_layer_idx
 
-                mat[ff_layer_start : ff_layer_start + unit_size, layer_start : layer_start + unit_size] = unit_funcs[j](m) * tempering[j]
+                mat[ff_layer_start : ff_layer_start + unit_size, layer_start : layer_start + unit_size] = unit_funcs[j]() * tempering[j]
     return mat
 
 ### RUN_TEST function

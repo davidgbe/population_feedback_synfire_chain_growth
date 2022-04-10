@@ -3,8 +3,8 @@
 ## Presets
 #SBATCH --job-name=growth
 
-#SBATCH -p stf
-#SBATCH -A stf
+#SBATCH -p compute
+#SBATCH -A labfairhall
 
 #SBATCH --nodes=1
 #SBATCH --time=20:00:00
