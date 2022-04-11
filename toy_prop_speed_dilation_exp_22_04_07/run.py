@@ -67,7 +67,7 @@ M = Generic(
     M=20,
     
     # Input params
-    DRIVING_HZ=2, # 2 Hz lambda Poisson input to system
+    DRIVING_HZ=1, # 2 Hz lambda Poisson input to system
     N_DRIVING_CELLS=10,
     PROJECTION_NUM=10,
     INPUT_STD=1e-3,
@@ -75,7 +75,7 @@ M = Generic(
     INPUT_DELAY=50e-3,
     
     # OTHER INPUTS
-    SGM_N=10e-10,  # noise level (A*sqrt(s))
+    SGM_N=10e-11,  # noise level (A*sqrt(s))
     I_EXT_B=0,  # additional baseline current input
 
     # Connection probabilities
@@ -113,7 +113,7 @@ M = Generic(
     GAMMA=0, 
 )
 
-S = Generic(RNG_SEED=args.rng_seed[0], DT=0.22e-3, T=500e-3, EPOCHS=1)
+S = Generic(RNG_SEED=args.rng_seed[0], DT=0.02e-3, T=600e-3, EPOCHS=1)
 np.random.seed(S.RNG_SEED)
 
 M.N_UVA = 0
@@ -410,7 +410,7 @@ def run_test(m, output_dir_name, n_show_only=None, add_noise=True, dropout={'E':
         axs[0].scatter(inh_raster[0, :] * 1000, inh_raster[1, :] - m.N_UVA, s=1, c='red', zorder=0, alpha=1)
 
         axs[0].set_ylim(-1, m.N_EXC + m.N_INH)
-        axs[0].set_xlim(m.INPUT_DELAY * 1000, 500)
+        axs[0].set_xlim(m.INPUT_DELAY * 1000, 600)
         axs[0].set_ylabel('Cell Index')
         axs[0].set_xlabel('Time (ms)')
 
